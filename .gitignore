@@ -2,6 +2,8 @@ node_modules
 # Keep environment variables out of version control
 .env
 .env.*
+# But the example file is safe to commit
+!.env.example
 # MCP config contains tokens — never commit
 .mcp.json
 
