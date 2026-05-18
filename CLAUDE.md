@@ -199,3 +199,92 @@ The following are explicitly out of scope. Do not implement them without a delib
 - **Notifications** — no email or Slack alerts when metrics cross thresholds.
 
 If a feature request touches any item on this list, raise it explicitly before starting work so scope can be consciously expanded rather than accidentally grown.
+
+---
+
+## MCP Integration
+
+### What MCP Is (and Is Not) at Runtime
+
+The GitHub MCP server (`@modelcontextprotocol/server-github`) runs **only during Claude Code development sessions** — it is not available to the Express server at runtime. MCP tools are used during development to:
+
+- Inspect real GitHub repository shapes to inform type definitions and transformers
+- Validate API response structures before writing production code
+- Explore the user's real repos and commits interactively
+
+The Express sync engine (`src/lib/github/syncEngine.ts`) calls the **GitHub REST API directly** via `fetch`, using the decrypted per-repo GitHub token stored in the database.
+
+### Project-level MCP Configuration
+
+**File:** `.mcp.json` (project root — listed in `.gitignore`, never committed)
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<your-pat-here>"
+      }
+    }
+  }
+}
+```
+
+To enable: create `.mcp.json` at the project root with your PAT. Claude Code loads it automatically.
+
+**Claude Code settings:** `.claude/settings.local.json` must include `"github"` in `enabledMcpjsonServers`.
+
+### Available MCP Tools (dev session only)
+
+| Tool | Usage in DevPulse |
+|---|---|
+| `mcp__github__search_repositories` | Discover repos; verify PAT scope |
+| `mcp__github__list_commits` | Inspect real commit shapes (used to build `GitHubCommit` type) |
+| `mcp__github__list_pull_requests` | Inspect real PR shapes (used to build `GitHubPR` type) |
+| `mcp__github__get_file_contents` | Browse repo file contents during development |
+
+### Confirmed GitHub API Response Shapes
+
+These shapes were verified via live MCP calls and are the basis for the types in `src/lib/metrics/transformers.ts`:
+
+**Commit** (`GET /repos/{owner}/{repo}/commits`):
+```json
+{
+  "sha": "99fa8d3a...",
+  "commit": {
+    "author": { "name": "Vicknesb", "email": "...", "date": "2023-04-05T05:52:13Z" },
+    "message": "..."
+  },
+  "author": { "login": "Vicknesb", "avatar_url": "https://avatars.githubusercontent.com/..." }
+}
+```
+
+**Pull Request** (`GET /repos/{owner}/{repo}/pulls?state=all`):
+```json
+{
+  "number": 1, "state": "closed", "title": "...",
+  "created_at": "...", "merged_at": "...", "closed_at": "...",
+  "user": { "login": "...", "avatar_url": "..." },
+  "requested_reviewers": []
+}
+```
+
+### Runtime Sync Flow
+
+```
+POST /api/sync/:repoId
+  → creates SyncLog (PENDING)
+  → setImmediate → runSync() [background, non-blocking]
+      ├─ decryptToken(repo) → GitHub PAT
+      ├─ GET /repos/{owner}/{repo}/commits?since=<last_synced_at>  (paginated, max 10 pages)
+      ├─ GET /repos/{owner}/{repo}/pulls?state=all                 (paginated, max 10 pages)
+      ├─ transformCommits() + transformPRs() + deriveContributors() + transformToActivityPayload()
+      ├─ prisma.metric.upsert × 4 types × 2 periods (7d + 30d)
+      └─ SyncLog → SUCCESS | FAILED
+```
+
+### File Browser Feature
+
+`GET /api/repos/:id/files?path=&ref=` decrypts the repo's stored token and proxies the GitHub Contents API, returning the file/directory listing for any path in the connected repository. This is the "import files" feature — it gives the frontend the ability to display a live file tree of connected repos.

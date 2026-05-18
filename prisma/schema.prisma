@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum MetricType {
+  COMMIT_FREQ
+  PR_STATS
+  ACTIVITY
+  CONTRIBUTOR
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password_hash String
+  name          String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  sessions   Session[]
+  user_repos UserRepository[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  user_id    String
+  token_hash String   @unique
+  expires_at DateTime
+  user_agent String?
+  ip_address String?
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@map("sessions")
+}
+
+model Repository {
+  id               String  @id @default(cuid())
+  github_repo_id   Int     @unique
+  full_name        String
+  owner            String
+  name             String
+  description      String?
+  is_private       Boolean @default(false)
+  default_branch   String  @default("main")
+  github_token_enc String
+  token_iv         String
+  token_tag        String
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  user_repos UserRepository[]
+  metrics    Metric[]
+  sync_logs  SyncLog[]
+
+  @@index([full_name])
+  @@index([github_repo_id])
+  @@map("repositories")
+}
+
+model UserRepository {
+  id            String   @id @default(cuid())
+  user_id       String
+  repository_id String
+  role          String   @default("owner")
+  connected_at  DateTime @default(now())
+
+  user       User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repository_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, repository_id])
+  @@index([user_id])
+  @@index([repository_id])
+  @@map("user_repositories")
+}
+
+model Metric {
+  id            String     @id @default(cuid())
+  repository_id String
+  type          MetricType
+  recorded_at   DateTime
+  period_days   Int        @default(7)
+  payload       Json
+  created_at    DateTime   @default(now())
+
+  repository Repository @relation(fields: [repository_id], references: [id], onDelete: Cascade)
+
+  @@unique([repository_id, type, recorded_at, period_days])
+  @@index([repository_id, type, recorded_at])
+  @@index([recorded_at])
+  @@map("metrics")
+}
+
+model SyncLog {
+  id                    String     @id @default(cuid())
+  repository_id         String
+  status                SyncStatus @default(PENDING)
+  triggered_by          String
+  started_at            DateTime   @default(now())
+  finished_at           DateTime?
+  last_synced_at        DateTime?
+  items_fetched         Int        @default(0)
+  error_message         String?
+  github_rate_remaining Int?
+
+  repository Repository @relation(fields: [repository_id], references: [id], onDelete: Cascade)
+
+  @@index([repository_id, started_at])
+  @@index([status])
+  @@map("sync_logs")
+}
