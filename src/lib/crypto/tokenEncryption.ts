@@ -1,10 +1,15 @@
 import { createCipheriv, createDecipheriv, randomBytes, hkdfSync } from "crypto";
 
+if (!process.env.ENCRYPTION_KEY) {
+  throw new Error("ENCRYPTION_KEY environment variable is required but not set");
+}
+
 function derivedKey(repoId: number): Buffer {
-  const master = Buffer.from(
-    process.env.ENCRYPTION_KEY ?? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    "base64"
-  ).slice(0, 32);
+  const raw = Buffer.from(process.env.ENCRYPTION_KEY as string, "base64");
+  if (raw.length < 32) {
+    throw new Error("ENCRYPTION_KEY must decode to at least 32 bytes");
+  }
+  const master = raw.slice(0, 32);
   return Buffer.from(hkdfSync("sha256", master, Buffer.alloc(0), String(repoId), 32));
 }
 

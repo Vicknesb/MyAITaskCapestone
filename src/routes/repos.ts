@@ -157,11 +157,25 @@ reposRouter.get("/:id/files", authenticate, async (req: AuthRequest, res): Promi
     return;
   }
 
-  const path = typeof req.query["path"] === "string" ? req.query["path"] : "";
-  const ref  = typeof req.query["ref"]  === "string" ? req.query["ref"]  : repository.default_branch;
+  const rawPath = typeof req.query["path"] === "string" ? req.query["path"] : "";
+  const rawRef  = typeof req.query["ref"]  === "string" ? req.query["ref"]  : repository.default_branch;
+
+  // Block path traversal and reject characters that could manipulate the URL
+  if (rawPath && !/^[\w\-./]+$/.test(rawPath)) {
+    res.status(400).json({ success: false, error: "Invalid path", code: "INVALID_PATH" });
+    return;
+  }
+  if (rawPath.split("/").some((seg) => seg === "..")) {
+    res.status(400).json({ success: false, error: "Path traversal not allowed", code: "INVALID_PATH" });
+    return;
+  }
+
+  const path = rawPath.replace(/^\/+/, ""); // strip leading slashes
+  const ref  = rawRef;
 
   const token = decryptToken(repository.github_token_enc, repository.token_iv, repository.token_tag, repository.github_repo_id);
-  const apiUrl = `https://api.github.com/repos/${repository.full_name}/contents/${path}?ref=${encodeURIComponent(ref)}`;
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const apiUrl = `https://api.github.com/repos/${repository.full_name}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`;
 
   const ghRes = await fetch(apiUrl, {
     headers: {

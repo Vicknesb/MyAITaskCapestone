@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { prisma } from "../lib/db";
 import { hashPassword, comparePassword } from "../lib/auth/password";
 import { signToken, hashToken } from "../lib/auth/jwt";
@@ -10,9 +11,33 @@ export const authRouter = Router();
 const COOKIE_NAME = "devpulse_session";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days ms
 
+const rateLimitResponse = {
+  success: false,
+  error: "Too many requests — please try again later",
+  code: "RATE_LIMITED",
+};
+
+// 10 attempts per 15 minutes per IP; Retry-After header added automatically via standardHeaders
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: (_req, res) => { res.status(429).json(rateLimitResponse); },
+});
+
+// 5 registrations per hour per IP
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  handler: (_req, res) => { res.status(429).json(rateLimitResponse); },
+});
+
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 
-authRouter.post("/register", async (req, res): Promise<void> => {
+authRouter.post("/register", registerLimiter, async (req, res): Promise<void> => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ success: false, error: "Invalid input", code: "VALIDATION_ERROR",
@@ -63,7 +88,7 @@ authRouter.post("/register", async (req, res): Promise<void> => {
 
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
 
-authRouter.post("/login", async (req, res): Promise<void> => {
+authRouter.post("/login", loginLimiter, async (req, res): Promise<void> => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ success: false, error: "Invalid input", code: "VALIDATION_ERROR" });

@@ -53,8 +53,6 @@ export async function authenticate(
         sameSite: "strict",
         maxAge:   COOKIE_MAX_AGE,
       });
-      // Signal renewed token to Bearer-based clients via header
-      res.setHeader("X-Renewed-Token", newToken);
     }
 
     req.userId    = payload.sub;

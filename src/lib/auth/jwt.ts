@@ -2,7 +2,11 @@ import jwt from "jsonwebtoken";
 import { createHash } from "crypto";
 import type { JWTPayload } from "../../types/auth";
 
-const JWT_SECRET  = process.env.JWT_SECRET  ?? "dev-secret-not-for-production";
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is required but not set");
+}
+
+const JWT_SECRET  = process.env.JWT_SECRET;
 const JWT_EXPIRY  = 7 * 24 * 60 * 60; // 7 days in seconds
 
 export function signToken(userId: string, sessionId: string): string {
