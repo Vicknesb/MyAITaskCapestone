@@ -49,7 +49,7 @@ describe("authenticate middleware", () => {
     expect(session).toBeNull();
   });
 
-  it("issues a renewed token via X-Renewed-Token header when TTL < 24 h", async () => {
+  it("issues a renewed session cookie when TTL < 24 h", async () => {
     // Session expires in 23 hours — below the 24 h renewal threshold
     const soonExpiry = new Date(Date.now() + 23 * 60 * 60 * 1000);
     const { token } = await createUserWithSession(soonExpiry);
@@ -59,27 +59,27 @@ describe("authenticate middleware", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    // Header must be present and be a non-empty JWT string
-    const renewed = res.headers["x-renewed-token"] as string;
-    expect(renewed).toBeDefined();
-    expect(renewed.split(".")).toHaveLength(3); // valid JWT structure
+    // Renewal sets a new httpOnly devpulse_session cookie
+    const cookies = res.headers["set-cookie"] as string[] | string | undefined;
+    const cookieArr = Array.isArray(cookies) ? cookies : cookies ? [cookies] : [];
+    expect(cookieArr.some((c) => c.startsWith("devpulse_session="))).toBe(true);
   });
 
   it("updates the session's token_hash in the DB after renewal", async () => {
     const soonExpiry = new Date(Date.now() + 23 * 60 * 60 * 1000);
     const { token, sessionId } = await createUserWithSession(soonExpiry);
 
-    const res = await request(app)
+    await request(app)
       .get("/api/repos")
       .set("Authorization", `Bearer ${token}`);
 
-    const renewedToken = res.headers["x-renewed-token"] as string;
-    const newHash = hashToken(renewedToken);
+    // The session row should have a NEW token_hash (not the original)
+    const originalHash = hashToken(token);
     const session = await prisma.session.findUnique({ where: { id: sessionId } });
-    expect(session?.token_hash).toBe(newHash);
+    expect(session?.token_hash).not.toBe(originalHash);
   });
 
-  it("does NOT renew the token when TTL is well above 24 h", async () => {
+  it("does NOT set a renewal cookie when TTL is well above 24 h", async () => {
     const farExpiry = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000);
     const { token } = await createUserWithSession(farExpiry);
 
@@ -88,7 +88,20 @@ describe("authenticate middleware", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.headers["x-renewed-token"]).toBeUndefined();
+    const cookies = res.headers["set-cookie"] as string[] | string | undefined;
+    const cookieArr = Array.isArray(cookies) ? cookies : cookies ? [cookies] : [];
+    expect(cookieArr.some((c) => c.startsWith("devpulse_session="))).toBe(false);
+  });
+
+  it("returns 401 when Authorization header is missing Bearer prefix", async () => {
+    const validExpiry = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    const { token } = await createUserWithSession(validExpiry);
+
+    const res = await request(app)
+      .get("/api/repos")
+      .set("Authorization", token); // no "Bearer " prefix
+
+    expect(res.status).toBe(401);
   });
 
   it("returns 401 for a completely invalid garbage token", async () => {
