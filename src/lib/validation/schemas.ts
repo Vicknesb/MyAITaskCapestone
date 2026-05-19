@@ -16,17 +16,20 @@ export const connectRepoSchema = z.object({
   github_token: z.string().min(20, "Token too short"),
 });
 
-export const metricsQuerySchema = z.object({
-  from: z.string().optional().transform((v) =>
-    v ? new Date(v) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-  ),
-  to: z.string().optional().transform((v) => (v ? new Date(v) : new Date())),
-  type: z.enum(["COMMIT_FREQ", "PR_STATS", "ACTIVITY", "CONTRIBUTOR"]).optional(),
-});
+const MAX_RANGE_MS = 90 * 24 * 60 * 60 * 1000;
 
-export const dashboardQuerySchema = z.object({
+const dateRangeBase = z.object({
   from: z.string().optional().transform((v) =>
     v ? new Date(v) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   ),
   to: z.string().optional().transform((v) => (v ? new Date(v) : new Date())),
-});
+}).refine((d) => d.from <= d.to, { message: "from must be before to" })
+  .refine((d) => d.to.getTime() - d.from.getTime() <= MAX_RANGE_MS, {
+    message: "Date range cannot exceed 90 days",
+  });
+
+export const metricsQuerySchema = dateRangeBase.and(
+  z.object({ type: z.enum(["COMMIT_FREQ", "PR_STATS", "ACTIVITY", "CONTRIBUTOR"]).optional() })
+);
+
+export const dashboardQuerySchema = dateRangeBase;

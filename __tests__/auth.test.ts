@@ -17,8 +17,7 @@ describe("POST /api/auth/register", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
-    // Register now auto-logins: data has { token, user }
-    expect(res.body.data).toHaveProperty("token");
+    expect(res.body.data).not.toHaveProperty("token");
     expect(res.body.data.user).toMatchObject({ email: "alice@example.com", name: "Alice" });
     expect(res.body.data.user).not.toHaveProperty("password_hash");
   });
@@ -53,12 +52,25 @@ describe("POST /api/auth/login", () => {
     await request(app).post("/api/auth/register").send({ email: "login@example.com", password: "Password123!" });
   });
 
-  it("returns 200 with JWT token for valid credentials", async () => {
+  it("returns 200 with session cookie and no token in body", async () => {
     const res = await request(app).post("/api/auth/login").send({ email: "login@example.com", password: "Password123!" });
 
     expect(res.status).toBe(200);
-    expect(res.body.data.token).toBeDefined();
+    expect(res.body.data).not.toHaveProperty("token");
     expect(res.body.data.expires_at).toBeDefined();
+    expect(res.headers["set-cookie"]).toBeDefined();
+  });
+
+  it("returns RateLimit headers on login responses", async () => {
+    const res = await request(app).post("/api/auth/login").send({ email: "login@example.com", password: "Password123!" });
+
+    expect(res.status).toBe(200);
+    // express-rate-limit draft-7 sends RateLimit header on every response
+    const hasRateLimitHeader =
+      res.headers["ratelimit"] !== undefined ||
+      res.headers["ratelimit-limit"] !== undefined ||
+      res.headers["x-ratelimit-limit"] !== undefined;
+    expect(hasRateLimitHeader).toBe(true);
   });
 
   it("creates a session row in the database on login", async () => {

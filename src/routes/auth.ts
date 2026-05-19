@@ -82,7 +82,7 @@ authRouter.post("/register", registerLimiter, async (req, res): Promise<void> =>
 
   res.status(201).json({
     success: true,
-    data: { token: finalToken, user: { id: user.id, email: user.email, name: user.name } },
+    data: { user: { id: user.id, email: user.email, name: user.name } },
   });
 });
 
@@ -134,7 +134,7 @@ authRouter.post("/login", loginLimiter, async (req, res): Promise<void> => {
 
   res.status(200).json({
     success: true,
-    data: { token: finalToken, expires_at: expiresAt.toISOString(), user: { id: user.id, email: user.email, name: user.name } },
+    data: { expires_at: expiresAt.toISOString(), user: { id: user.id, email: user.email, name: user.name } },
   });
 });
 

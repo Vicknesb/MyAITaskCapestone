@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, clearToken, setToken } from "@/lib/apiClient";
+import { api, ApiError } from "@/lib/apiClient";
 
 export interface User {
   id: string;
@@ -10,9 +10,9 @@ export interface User {
   created_at: string;
 }
 
-interface AuthTokenResponse {
-  token: string;
-  user?: { id: string; email: string; name: string | null };
+interface AuthResponse {
+  user: { id: string; email: string; name: string | null };
+  expires_at?: string;
 }
 
 interface LoginInput    { email: string; password: string }
@@ -29,17 +29,15 @@ export function useAuth() {
   });
 
   const loginMutation = useMutation({
-    mutationFn: (body: LoginInput) => api.post<AuthTokenResponse>("/api/auth/login", body),
-    onSuccess: ({ token }) => {
-      setToken(token);
+    mutationFn: (body: LoginInput) => api.post<AuthResponse>("/api/auth/login", body),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["auth"] });
     },
   });
 
   const registerMutation = useMutation({
-    mutationFn: (body: RegisterInput) => api.post<AuthTokenResponse>("/api/auth/register", body),
-    onSuccess: ({ token }) => {
-      setToken(token);
+    mutationFn: (body: RegisterInput) => api.post<AuthResponse>("/api/auth/register", body),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["auth"] });
     },
   });
@@ -47,7 +45,6 @@ export function useAuth() {
   const logoutMutation = useMutation({
     mutationFn: () => api.delete<void>("/api/auth/logout"),
     onSettled: () => {
-      clearToken();
       qc.clear();
     },
   });

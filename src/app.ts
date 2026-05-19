@@ -1,6 +1,7 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import helmet from "helmet";
 
 import { authRouter }    from "./routes/auth";
 import { reposRouter }   from "./routes/repos";
@@ -10,6 +11,7 @@ import { dashboardRouter } from "./routes/dashboard";
 
 export const app = express();
 
+app.use(helmet());
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN ?? "http://localhost:3000", credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
