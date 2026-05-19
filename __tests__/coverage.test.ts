@@ -82,34 +82,33 @@ describe("POST /api/auth/register — input validation boundaries", () => {
   });
 });
 
-// ─── Auth — GET /me after user deletion ──────────────────────────────────────
+// ─── Auth — GET /me response shape ───────────────────────────────────────────
 
-describe("GET /api/auth/me — ghost session", () => {
-  it("returns 401 when the user row has been deleted but session still exists", async () => {
-    const { user, token } = await createAuthUser("ghost@example.com");
-    // Delete the user row directly, leaving the session orphaned
-    await prisma.session.deleteMany({ where: { user_id: user.id } });
-    await prisma.user.delete({ where: { id: user.id } });
+describe("GET /api/auth/me — response shape", () => {
+  it("returns id, email, name, and created_at — never password_hash", async () => {
+    const { token } = await createAuthUser("shape@example.com");
+    const res = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`);
 
-    // Re-create only the session so authenticate passes the DB check
-    const { signToken, hashToken } = await import("../src/lib/auth/jwt");
-    const sessionId = "ghost-session";
-    const ghostToken = signToken(user.id, sessionId);
-    await prisma.session.create({
-      data: {
-        id: sessionId,
-        user_id: user.id,  // FK no longer exists — but we test the user.findUnique null branch
-        token_hash: hashToken(ghostToken),
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveProperty("id");
+    expect(res.body.data).toHaveProperty("email", "shape@example.com");
+    expect(res.body.data).toHaveProperty("created_at");
+    expect(res.body.data).not.toHaveProperty("password_hash");
+  });
+
+  it("returns 401 for a valid JWT that was signed with the correct secret but has no matching session", async () => {
+    const { signToken } = await import("../src/lib/auth/jwt");
+    // Token is cryptographically valid but no session row exists for it
+    const orphanToken = signToken("nonexistent-user-id", "nonexistent-session-id");
 
     const res = await request(app)
       .get("/api/auth/me")
-      .set("Authorization", `Bearer ${ghostToken}`);
+      .set("Authorization", `Bearer ${orphanToken}`);
 
-    // Either 401 (user not found) or 500 (FK violation) — the important thing is it doesn't return 200
-    expect(res.status).not.toBe(200);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("UNAUTHORIZED");
   });
 });
 

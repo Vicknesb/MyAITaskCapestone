@@ -3,6 +3,7 @@ import request from "supertest";
 import { app } from "../src/app";
 import { prisma } from "../src/lib/db";
 import { resetDb, teardown, createAuthUser } from "./helpers";
+import { hashPassword } from "../src/lib/auth/password";
 
 beforeEach(resetDb);
 afterAll(teardown);
@@ -49,7 +50,10 @@ describe("POST /api/auth/register", () => {
 
 describe("POST /api/auth/login", () => {
   beforeEach(async () => {
-    await request(app).post("/api/auth/register").send({ email: "login@example.com", password: "Password123!" });
+    // Use DB helper directly to avoid the register rate limiter (5/hr)
+    await prisma.user.create({
+      data: { email: "login@example.com", password_hash: await hashPassword("Password123!") },
+    });
   });
 
   it("returns 200 with session cookie and no token in body", async () => {

@@ -97,9 +97,9 @@ describe("GET /api/metrics/:repoId", () => {
     const { user, token } = await createAuthUser();
     const repo = await seedRepoWithMetrics(user.id);
 
-    // Metrics are 5 days ago; request range is 1 year ago to 6 months ago
-    const from = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-    const to   = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+    // Metrics are 5 days ago; use a 20-day window from 60→40 days ago (well within 90-day cap)
+    const from = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const to   = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
 
     const res = await request(app)
       .get(`/api/metrics/${repo.id}?from=${from}&to=${to}`)

@@ -65,7 +65,7 @@ describe("authenticate middleware", () => {
     expect(cookieArr.some((c) => c.startsWith("devpulse_session="))).toBe(true);
   });
 
-  it("updates the session's token_hash in the DB after renewal", async () => {
+  it("extends the session expires_at in the DB after renewal", async () => {
     const soonExpiry = new Date(Date.now() + 23 * 60 * 60 * 1000);
     const { token, sessionId } = await createUserWithSession(soonExpiry);
 
@@ -73,10 +73,9 @@ describe("authenticate middleware", () => {
       .get("/api/repos")
       .set("Authorization", `Bearer ${token}`);
 
-    // The session row should have a NEW token_hash (not the original)
-    const originalHash = hashToken(token);
+    // Renewal sets a new 7-day expiry, which must be later than the original 23 h expiry
     const session = await prisma.session.findUnique({ where: { id: sessionId } });
-    expect(session?.token_hash).not.toBe(originalHash);
+    expect(session?.expires_at.getTime()).toBeGreaterThan(soonExpiry.getTime());
   });
 
   it("does NOT set a renewal cookie when TTL is well above 24 h", async () => {

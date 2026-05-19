@@ -500,6 +500,50 @@ Configured in `vitest.config.ts`: 80% statements/functions/lines, 75% branches, 
 
 ---
 
+## Claude Code Workflow
+
+### Plan Mode
+
+Use plan mode (`/plan`) before implementing any non-trivial change. Plan mode lets you outline files to create, patterns to follow, and edge cases to handle — and get agreement before writing code. This prevents rework and keeps implementation aligned with existing conventions.
+
+**When to enter plan mode:**
+- Adding a new API route or feature (always)
+- Refactoring across multiple files
+- Any change that touches the auth flow, encryption, or session handling
+- When the scope is unclear
+
+**When plan mode is not needed:**
+- Single-file bug fixes with obvious solutions
+- Updating a test to match already-approved behaviour
+- Documentation changes
+
+The `/add-feature` command enters plan mode automatically before scaffolding any files.
+
+---
+
+### CRISP Prompting
+
+The three custom commands in `.claude/commands/` follow the CRISP structure. Use this same structure when writing ad-hoc prompts for complex tasks:
+
+| Element | Purpose | Example |
+|---|---|---|
+| **Context** | Background the model needs to understand the codebase | "DevPulse is a dual-server app — Next.js port 3000, Express port 4000…" |
+| **Role** | Who the model should act as | "You are a security engineer auditing before a release…" |
+| **Intent** | The specific goal | "Scan for unauthenticated routes and hardcoded secrets…" |
+| **Structure** | How to organise and deliver output | "Complete all 6 steps in order. Print a summary block at the end." |
+| **Parameters** | Constraints, paths, thresholds | "Exclude node_modules/, .next/, coverage/. Flag only Critical and High." |
+
+**Example — ad-hoc CRISP prompt:**
+```
+Context: DevPulse's syncEngine.ts paginates GitHub commits and upserts metrics. 
+Role: You are a performance engineer reviewing for N+1 queries and unnecessary API calls.
+Intent: Identify any query or fetch that fires more times than necessary per sync run.
+Structure: List each issue with file:line, description, and a one-line fix recommendation.
+Parameters: Focus only on src/lib/github/syncEngine.ts and src/routes/sync.ts.
+```
+
+---
+
 ## What To Never Do
 
 **Never use fallback values for secrets.** `JWT_SECRET` and `ENCRYPTION_KEY` must be set — the application throws at startup if either is missing. There is no silent fallback. Any code that adds `?? "some-default"` to a secret read creates a critical vulnerability.

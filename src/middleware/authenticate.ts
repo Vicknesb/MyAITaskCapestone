@@ -16,9 +16,10 @@ export async function authenticate(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // Only accept "Bearer <token>" — bare tokens without the prefix are rejected
   const raw =
     req.cookies?.devpulse_session ??
-    req.headers.authorization?.replace(/^Bearer\s+/i, "");
+    req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
 
   if (!raw) {
     res.status(401).json({ success: false, error: "Unauthorized", code: "UNAUTHORIZED" });
