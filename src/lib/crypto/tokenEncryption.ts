@@ -4,13 +4,19 @@ if (!process.env.ENCRYPTION_KEY) {
   throw new Error("ENCRYPTION_KEY environment variable is required but not set");
 }
 
+// Fixed application salt for HKDF domain separation (RFC 5869 §3.1).
+// Non-empty salt strengthens key derivation against master-key compromise.
+// IMPORTANT: changing this salt invalidates all previously encrypted tokens —
+// run a re-encryption migration before deploying any change here.
+const HKDF_SALT = Buffer.from("devpulse-v1-github-token-encryption");
+
 function derivedKey(repoId: number): Buffer {
   const raw = Buffer.from(process.env.ENCRYPTION_KEY as string, "base64");
   if (raw.length < 32) {
     throw new Error("ENCRYPTION_KEY must decode to at least 32 bytes");
   }
   const master = raw.slice(0, 32);
-  return Buffer.from(hkdfSync("sha256", master, Buffer.alloc(0), String(repoId), 32));
+  return Buffer.from(hkdfSync("sha256", master, HKDF_SALT, `devpulse-github-token-${repoId}`, 32));
 }
 
 export function encryptToken(

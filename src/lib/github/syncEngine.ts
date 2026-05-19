@@ -118,8 +118,22 @@ export async function runSync(repositoryId: string, syncLogId: string): Promise<
       data: {
         status: SyncStatus.FAILED,
         finished_at: new Date(),
-        error_message: err instanceof Error ? err.message : String(err),
+        error_message: sanitizeSyncError(err),
       },
     });
   }
+}
+
+// Map raw errors to safe user-visible messages (F-11).
+// Raw error.message can contain file-system paths or env var names — never
+// store those in a user-accessible table column.
+function sanitizeSyncError(err: unknown): string {
+  if (!(err instanceof Error)) return "Unexpected sync failure";
+  const msg = err.message;
+  if (/GitHub API (401|403)/.test(msg))  return "GitHub authentication failed — token may be invalid or revoked";
+  if (/GitHub API 404/.test(msg))        return "Repository not found on GitHub";
+  if (/GitHub API 429/.test(msg))        return "GitHub rate limit exceeded — sync will retry";
+  if (/GitHub API 5\d\d/.test(msg))      return "GitHub API server error — sync will retry";
+  if (msg.startsWith("GitHub API"))      return "GitHub API error";
+  return "Sync failed — check repository connection and token validity";
 }

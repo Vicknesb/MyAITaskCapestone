@@ -119,17 +119,19 @@ describe("runSync", () => {
 
     const lastCall = mockPrisma.syncLog.update.mock.calls.at(-1)![0];
     expect(lastCall.data.status).toBe("FAILED");
-    expect(lastCall.data.error_message).toContain("GitHub API 500");
+    // Error messages are sanitized before DB persistence (F-11)
+    expect(lastCall.data.error_message).toBe("GitHub API server error — sync will retry");
   });
 
-  it("marks sync FAILED and records error message on unexpected error", async () => {
+  it("marks sync FAILED and records a safe error message on unexpected error", async () => {
     mockPrisma.repository.findUniqueOrThrow.mockRejectedValue(new Error("DB connection lost"));
 
     await runSync("repo-id-1", "sync-log-id");
 
     const lastCall = mockPrisma.syncLog.update.mock.calls.at(-1)![0];
     expect(lastCall.data.status).toBe("FAILED");
-    expect(lastCall.data.error_message).toBe("DB connection lost");
+    // Internal error details are not stored verbatim — only a safe message
+    expect(lastCall.data.error_message).toBe("Sync failed — check repository connection and token validity");
   });
 
   it("uses last successful sync time as the 'since' query param", async () => {
@@ -185,13 +187,33 @@ describe("runSync", () => {
     expect(lastCall.data.last_synced_at.toISOString()).toBe(pr.created_at);
   });
 
-  it("records String(err) when a non-Error value is thrown", async () => {
+  it("records a safe message when a non-Error value is thrown", async () => {
     mockPrisma.repository.findUniqueOrThrow.mockRejectedValue("plain string error");
 
     await runSync("repo-id-1", "sync-log-id");
 
     const lastCall = mockPrisma.syncLog.update.mock.calls.at(-1)![0];
     expect(lastCall.data.status).toBe("FAILED");
-    expect(lastCall.data.error_message).toBe("plain string error");
+    // Non-Error throws are also sanitized — raw string is not stored
+    expect(lastCall.data.error_message).toBe("Unexpected sync failure");
+  });
+
+  it.each([
+    [401, "GitHub authentication failed — token may be invalid or revoked"],
+    [403, "GitHub authentication failed — token may be invalid or revoked"],
+    [404, "Repository not found on GitHub"],
+    [429, "GitHub rate limit exceeded — sync will retry"],
+    [422, "GitHub API error"],
+  ])("sanitizes GitHub API %i error to a safe message", async (status, expected) => {
+    mockFetch.mockResolvedValue({
+      ok: false, status,
+      headers: { get: () => null },
+    });
+
+    await runSync("repo-id-1", "sync-log-id");
+
+    const lastCall = mockPrisma.syncLog.update.mock.calls.at(-1)![0];
+    expect(lastCall.data.status).toBe("FAILED");
+    expect(lastCall.data.error_message).toBe(expected);
   });
 });

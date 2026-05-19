@@ -222,7 +222,8 @@ The Express sync engine (`src/lib/github/syncEngine.ts`) calls the **GitHub REST
 
 ### Project-level MCP Configuration
 
-**File:** `.mcp.json` (project root — listed in `.gitignore`, never committed)
+**Committed example:** `.mcp.json.example` (safe to commit — contains no secrets)  
+**Live file:** `.mcp.json` (listed in `.gitignore`, never committed — contains real PAT)
 
 ```json
 {
@@ -230,26 +231,42 @@ The Express sync engine (`src/lib/github/syncEngine.ts`) calls the **GitHub REST
     "github": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<your-pat-here>"
-      }
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "<your-pat-here>" }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "env": {}
     }
   }
 }
 ```
 
-To enable: create `.mcp.json` at the project root with your PAT. Claude Code loads it automatically.
+To enable: copy `.mcp.json.example` to `.mcp.json`, fill in your PAT, and Claude Code loads it automatically on the next session start.
 
-**Claude Code settings:** `.claude/settings.local.json` must include `"github"` in `enabledMcpjsonServers`.
+**Claude Code settings:** `.claude/settings.local.json` lists `"github"`, `"filesystem"`, and `"system-monitor"` in `enabledMcpjsonServers`.
 
 ### Available MCP Tools (dev session only)
 
-| Tool | Usage in DevPulse |
+| Tool | Concrete usage in DevPulse |
 |---|---|
-| `mcp__github__search_repositories` | Discover repos; verify PAT scope |
-| `mcp__github__list_commits` | Inspect real commit shapes (used to build `GitHubCommit` type) |
-| `mcp__github__list_pull_requests` | Inspect real PR shapes (used to build `GitHubPR` type) |
-| `mcp__github__get_file_contents` | Browse repo file contents during development |
+| `mcp__github__search_repositories` | Discover repos by name; verify PAT scope before connecting |
+| `mcp__github__list_commits` | Inspect real commit shapes — used to define `GitHubCommit` type in `src/lib/metrics/transformers.ts` |
+| `mcp__github__list_pull_requests` | Inspect real PR shapes — used to define `GitHubPR` type and test `merged_at` null handling |
+| `mcp__github__get_file_contents` | Browse repo file trees during development (mirrors the `/api/repos/:id/files` endpoint) |
+| `mcp__filesystem__read_file` | Read local project files without leaving the Claude Code session |
+| `mcp__filesystem__directory_tree` | Explore the project structure when planning new features |
+| `mcp__system-monitor__get_system_overview` | Check Node.js process memory and CPU during long test runs |
+
+### How MCP Was Used During Development
+
+The GitHub MCP server was used at three concrete points in this project:
+
+1. **Type definitions** (`src/lib/metrics/transformers.ts`): `mcp__github__list_commits` and `mcp__github__list_pull_requests` were called against the real `Vicknesb/MyAITaskCapestone` repository to verify the exact shape of GitHub API responses. The confirmed shapes (with optional `author` field on commits, `merged_at` nullable on PRs) are documented in the "Confirmed GitHub API Response Shapes" section below.
+
+2. **File browser feature** (`src/routes/repos.ts` `/files` endpoint): `mcp__github__get_file_contents` was used to understand the GitHub Contents API response format (array of `{name, path, type, sha, download_url}` objects), which is what the file-browser proxies to the frontend.
+
+3. **Security audit cross-check**: `mcp__filesystem__read_file` was used during the security audit (`/security-scan` command) to read all route and middleware files without context-switching to the editor.
 
 ### Confirmed GitHub API Response Shapes
 

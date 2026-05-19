@@ -20,7 +20,7 @@ export interface Repo {
 export function useRepos() {
   const qc = useQueryClient();
 
-  const { data: repos = [], isLoading } = useQuery<Repo[]>({
+  const { data: repos = [], isLoading, isError, error } = useQuery<Repo[]>({
     queryKey: ["repos"],
     queryFn: async () => {
       const result = await api.get<{ repositories: Repo[] }>("/api/repos");
@@ -47,6 +47,8 @@ export function useRepos() {
   return {
     repos,
     isLoading,
+    isError,
+    error,
     connectRepo: connectMutation.mutateAsync,
     disconnectRepo: disconnectMutation.mutateAsync,
     syncRepo: syncMutation.mutateAsync,

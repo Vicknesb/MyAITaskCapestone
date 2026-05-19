@@ -257,8 +257,10 @@ describe("GET /api/metrics/:repoId — date range validation", () => {
     const { user, token } = await createAuthUser();
     const { repo } = await seedRepo(user.id, 500032);
 
-    const from = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    const to   = new Date().toISOString();
+    // Anchor both ends to the same instant to avoid millisecond drift exceeding the cap
+    const anchor = Date.now();
+    const from = new Date(anchor - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const to   = new Date(anchor).toISOString();
 
     const res = await request(app)
       .get(`/api/metrics/${repo.id}?from=${from}&to=${to}`)

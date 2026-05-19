@@ -62,13 +62,22 @@ function RepoCharts({ repo }: { repo: RepoDashboard }) {
 }
 
 export default function DashboardPage() {
-  const { data: dashboard, isLoading } = useDashboard();
+  const { data: dashboard, isLoading, isError, error } = useDashboard();
   const [selectedRepoId, setSelectedRepoId] = useState<string>("all");
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
         <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        Failed to load dashboard:{" "}
+        {error instanceof Error ? error.message : "An unexpected error occurred. Please refresh the page."}
       </div>
     );
   }
