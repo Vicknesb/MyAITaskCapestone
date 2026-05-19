@@ -14,7 +14,7 @@ out/
 # TypeScript build info
 tsconfig.tsbuildinfo
 
-# Test coverage reports
+# Test coverage reports (HTML/lcov excluded; coverage-summary.json committed in root)
 coverage/
 
 # Logs

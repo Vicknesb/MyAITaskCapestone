@@ -15,6 +15,8 @@ export default defineConfig({
         "src/server.ts",  // just app.listen(), not unit-testable
         "src/types/**",   // type-only definitions, no executable code
       ],
+      reporter: ["text", ["json-summary", { file: "../coverage-summary.json" }]],
+      reportsDirectory: "./coverage",
       thresholds: {
         statements: 80,
         branches: 75,

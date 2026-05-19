@@ -157,4 +157,35 @@ describe("GET /api/metrics (metrics router root)", () => {
     expect(res.body.data.summary.total_prs_merged).toBe(2);
     expect(res.body.data.summary.active_contributors).toBe(2);
   });
+
+  it("returns null metric fields when a connected repo has no metrics", async () => {
+    const { user, token } = await createAuthUser();
+
+    const { enc, iv, tag } = encryptToken("ghp_faketoken", 889);
+    const repo = await prisma.repository.create({
+      data: {
+        github_repo_id: 889,
+        full_name: "org/empty-metrics-repo",
+        owner: "org",
+        name: "empty-metrics-repo",
+        is_private: false,
+        github_token_enc: enc,
+        token_iv: iv,
+        token_tag: tag,
+      },
+    });
+    await prisma.userRepository.create({ data: { user_id: user.id, repository_id: repo.id } });
+
+    const res = await request(app)
+      .get("/api/metrics")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.summary.repos_tracked).toBe(1);
+    const entry = res.body.data.per_repo[0];
+    expect(entry.commit_freq).toBeNull();
+    expect(entry.pr_stats).toBeNull();
+    expect(entry.activity).toBeNull();
+    expect(entry.contributors).toBeNull();
+  });
 });

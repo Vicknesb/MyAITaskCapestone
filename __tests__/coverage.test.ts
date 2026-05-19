@@ -342,6 +342,43 @@ describe("GET /api/dashboard — aggregate summary", () => {
   });
 });
 
+// ─── Dashboard — repo connected but no metrics ────────────────────────────────
+
+describe("GET /api/dashboard — repo with no metrics in range", () => {
+  it("returns null for all metric fields when repo has no metrics", async () => {
+    const { user, token } = await createAuthUser();
+    // Connect a repo but seed zero metrics for it
+    const { enc, iv, tag } = encryptToken("ghp_faketoken123456", 600001);
+    const repo = await prisma.repository.create({
+      data: {
+        github_repo_id: 600001,
+        full_name: "org/no-metrics-repo",
+        owner: "org",
+        name: "no-metrics-repo",
+        is_private: false,
+        github_token_enc: enc,
+        token_iv: iv,
+        token_tag: tag,
+      },
+    });
+    await prisma.userRepository.create({
+      data: { user_id: user.id, repository_id: repo.id },
+    });
+
+    const res = await request(app)
+      .get("/api/dashboard")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.summary.repos_tracked).toBe(1);
+    const entry = res.body.data.per_repo[0];
+    expect(entry.commit_freq).toBeNull();
+    expect(entry.pr_stats).toBeNull();
+    expect(entry.activity).toBeNull();
+    expect(entry.contributors).toBeNull();
+  });
+});
+
 // ─── 404 catch-all ────────────────────────────────────────────────────────────
 
 describe("Express 404 catch-all", () => {

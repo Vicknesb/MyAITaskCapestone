@@ -23,8 +23,7 @@ async function paginate<T>(url: string, token: string): Promise<{ items: T[]; ra
   let rateRemaining: number | null = null;
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const sep = url.includes("?") ? "&" : "?";
-    const res = await fetch(`${url}${sep}per_page=${PER_PAGE}&page=${page}`, {
+    const res = await fetch(`${url}&per_page=${PER_PAGE}&page=${page}`, {
       headers: ghHeaders(token),
     });
 

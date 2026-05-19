@@ -173,4 +173,25 @@ describe("runSync", () => {
     const lastCall = mockPrisma.syncLog.update.mock.calls.at(-1)![0];
     expect(lastCall.data.items_fetched).toBe(5);
   });
+
+  it("uses PR created_at as last_synced_at when commits array is empty", async () => {
+    const pr = makeGHPR(3);
+    mockGitHubSuccess([], [pr]);
+
+    await runSync("repo-id-1", "sync-log-id");
+
+    const lastCall = mockPrisma.syncLog.update.mock.calls.at(-1)![0];
+    expect(lastCall.data.status).toBe("SUCCESS");
+    expect(lastCall.data.last_synced_at.toISOString()).toBe(pr.created_at);
+  });
+
+  it("records String(err) when a non-Error value is thrown", async () => {
+    mockPrisma.repository.findUniqueOrThrow.mockRejectedValue("plain string error");
+
+    await runSync("repo-id-1", "sync-log-id");
+
+    const lastCall = mockPrisma.syncLog.update.mock.calls.at(-1)![0];
+    expect(lastCall.data.status).toBe("FAILED");
+    expect(lastCall.data.error_message).toBe("plain string error");
+  });
 });
